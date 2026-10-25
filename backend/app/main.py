@@ -1,0 +1,70 @@
+"""ASTRION Scientific Engine — FastAPI Main Application.
+
+High-performance astronomical intelligence backend powered by Astropy, NumPy, and FastAPI.
+"""
+
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
+from backend.app.api.fits import router as fits_router
+from backend.app.api.health import router as health_router
+from backend.app.api.system import router as system_router
+from backend.app.config import settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifecycle management."""
+    print(f"[ASTRION Backend] Starting {settings.APP_NAME} v{settings.VERSION} on {settings.HOST}:{settings.PORT}")
+    yield
+    print(f"[ASTRION Backend] Shutting down {settings.APP_NAME}")
+
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.VERSION,
+    description="Scientific astronomical backend for moving celestial object detection and multi-epoch tracking.",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# CORS configuration for Electron and Web browsers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost)(:[0-9]+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include Routers
+app.include_router(health_router)
+app.include_router(system_router)
+app.include_router(fits_router)
+
+
+@app.get("/", tags=["Root"])
+def root():
+    """Service status and quick links."""
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.VERSION,
+        "docs": "/docs",
+        "health": "/health",
+        "status": "operational",
+    }
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "backend.app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        log_level="info",
+        reload=False,
+    )

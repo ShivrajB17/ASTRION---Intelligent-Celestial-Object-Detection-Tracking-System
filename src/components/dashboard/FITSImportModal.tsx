@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, FileText, Check, X, AlertCircle, Database, Sparkles, FolderOpen } from 'lucide-react'
 import { useAstrion } from '../../context/AstrionContext'
 import { FitsIngestionService } from '../../services/fitsIngestion.service'
+import { backendApi } from '../../services/backendApi.service'
 import type { FitsObservation } from '../../types/astronomy'
 
 const SAMPLE_ASTRONOMICAL_DATASETS: Array<{
@@ -66,6 +67,35 @@ export const FITSImportModal: React.FC = () => {
 
   if (!isImportModalOpen) return null
 
+  const inspectFileWithBestService = async (file: File): Promise<FitsObservation | null> => {
+    try {
+      // 1. Attempt authentic Astropy inspection via local Python backend
+      const insp = await backendApi.inspectFitsFile(file)
+      return {
+        id: `obs-astropy-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        filename: insp.filename,
+        sizeBytes: insp.file_size_bytes,
+        uploadedAt: new Date().toISOString(),
+        targetName: insp.object_name || file.name.replace(/\.(fits|fit|fts|gz)$/i, ''),
+        filterBand: insp.filter_band || 'Astropy Band',
+        telescope: insp.telescope || 'Astropy Engine',
+        raCenter: insp.ra_deg ?? undefined,
+        decCenter: insp.dec_deg ?? undefined,
+        status: 'raw',
+        dimensions: insp.dimensions
+          ? { width: insp.dimensions.width || 2048, height: insp.dimensions.height || 2048 }
+          : undefined,
+      }
+    } catch {
+      // 2. Graceful fallback to client-side reader if backend is offline
+      const clientResult = await FitsIngestionService.parseLocalFileMetadata(file)
+      if (clientResult.success && clientResult.data) {
+        return clientResult.data
+      }
+      return null
+    }
+  }
+
   const handleFileSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
     setIsProcessing(true)
@@ -73,10 +103,8 @@ export const FITSImportModal: React.FC = () => {
     const newObservations: FitsObservation[] = []
     for (let i = 0; i < e.target.files.length; i++) {
       const file = e.target.files[i]
-      const result = await FitsIngestionService.parseLocalFileMetadata(file)
-      if (result.success && result.data) {
-        newObservations.push(result.data)
-      }
+      const obs = await inspectFileWithBestService(file)
+      if (obs) newObservations.push(obs)
     }
 
     setStagedFiles((prev) => [...prev, ...newObservations])
@@ -127,10 +155,8 @@ export const FITSImportModal: React.FC = () => {
     const newObservations: FitsObservation[] = []
     for (let i = 0; i < e.dataTransfer.files.length; i++) {
       const file = e.dataTransfer.files[i]
-      const result = await FitsIngestionService.parseLocalFileMetadata(file)
-      if (result.success && result.data) {
-        newObservations.push(result.data)
-      }
+      const obs = await inspectFileWithBestService(file)
+      if (obs) newObservations.push(obs)
     }
     setStagedFiles((prev) => [...prev, ...newObservations])
     setIsProcessing(false)

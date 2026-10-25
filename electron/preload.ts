@@ -20,6 +20,10 @@ const desktopAPI: AstrionDesktopAPI = {
     if (typeof url !== 'string') return
     return ipcRenderer.invoke('astrion:open-external-url', url)
   },
+
+  getBackendStatus: async () => {
+    return ipcRenderer.invoke('astrion:get-backend-status')
+  },
 }
 
 // Securely expose the desktop API to the renderer under window.astrion

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { backendManager } from './backendManager.ts'
 
 // Retain a global reference to prevent garbage collection
 let mainWindow: BrowserWindow | null = null
@@ -114,11 +115,21 @@ function registerIpcHandlers(): void {
       await shell.openExternal(url)
     }
   })
+
+  ipcMain.handle('astrion:get-backend-status', () => {
+    return backendManager.getStatus()
+  })
 }
 
 // Application Lifecycle
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpcHandlers()
+
+  // Launch Python backend process asynchronously
+  backendManager.start().catch((err) => {
+    console.error('[ASTRION Main] Background launch error:', err)
+  })
+
   createWindow()
 
   // macOS activation behavior: re-create window when dock icon is clicked
@@ -127,6 +138,15 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+// Cleanly stop backend when Electron terminates
+app.on('before-quit', () => {
+  backendManager.stop()
+})
+
+process.on('exit', () => {
+  backendManager.stop()
 })
 
 // macOS standard behavior: keep application running in dock when all windows are closed

@@ -8,6 +8,15 @@ export interface NativeFileSelectionResult {
   filePaths: string[]
 }
 
+export interface BackendProcessStatus {
+  running: boolean
+  ready: boolean
+  port: number
+  url: string
+  error?: string
+  pid?: number
+}
+
 export interface AstrionDesktopAPI {
   /** True when running inside native Electron desktop shell */
   readonly isElectron: boolean
@@ -23,6 +32,9 @@ export interface AstrionDesktopAPI {
 
   /** Opens an approved external web URL in the macOS default browser */
   openExternalUrl: (url: string) => Promise<void>
+
+  /** Returns current status of the integrated Python scientific engine */
+  getBackendStatus: () => Promise<BackendProcessStatus>
 }
 
 declare global {

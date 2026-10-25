@@ -11,6 +11,8 @@
     "build:all": "npm run build && npm run build:electron",
     "electron:dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"cyan,magenta\" \"cross-env BROWSER=none vite --host 127.0.0.1\" \"wait-on -t 20000 tcp:127.0.0.1:5173 && node electron/build.js && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "electron:preview": "npm run build:all && electron .",
+    "backend:dev": "PYTHONPATH=. backend/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8088 --reload",
+    "test:backend": "PYTHONPATH=. backend/.venv/bin/pytest backend/tests",
     "lint": "oxlint",
     "preview": "vite preview"
   },

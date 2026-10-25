@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Cpu, Monitor, Sliders, RotateCcw, Check, ShieldCheck } from 'lucide-react'
+import { Cpu, Monitor, Sliders, RotateCcw, Check, ShieldCheck, Activity, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useAstrion } from '../context/AstrionContext'
+import { backendApi } from '../services/backendApi.service'
+import type { BackendHealth, BackendSystemInfo } from '../services/backendApi.service'
 
 export const SettingsPage: React.FC = () => {
   const { notify, clearObservations, resetPipeline } = useAstrion()
@@ -9,6 +11,37 @@ export const SettingsPage: React.FC = () => {
   const [velocityUnit, setVelocityUnit] = useState<'arcsec_hr' | 'deg_day'>('arcsec_hr')
   const [pythonPort, setPythonPort] = useState('8088')
   const [desktopInfo, setDesktopInfo] = useState<{ version: string; platform: string } | null>(null)
+
+  // Python Backend State
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false)
+  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null)
+  const [backendSystem, setBackendSystem] = useState<BackendSystemInfo | null>(null)
+  const [backendLatency, setBackendLatency] = useState<number | null>(null)
+  const [backendError, setBackendError] = useState<string | null>(null)
+  const [lastChecked, setLastChecked] = useState<Date | null>(null)
+
+  const checkBackendConnection = async () => {
+    setIsCheckingBackend(true)
+    setBackendError(null)
+    try {
+      backendApi.setBaseUrl(`http://127.0.0.1:${pythonPort}`)
+      const { health, latencyMs } = await backendApi.checkHealth()
+      setBackendHealth(health)
+      setBackendLatency(latencyMs)
+      setLastChecked(new Date())
+
+      // Fetch system info
+      const sys = await backendApi.getSystemInfo()
+      setBackendSystem(sys)
+    } catch (err: any) {
+      setBackendHealth(null)
+      setBackendSystem(null)
+      setBackendLatency(null)
+      setBackendError(err.message || 'Connection refused')
+    } finally {
+      setIsCheckingBackend(false)
+    }
+  }
 
   useEffect(() => {
     if (window.astrion?.isElectron) {
@@ -19,9 +52,13 @@ export const SettingsPage: React.FC = () => {
         setDesktopInfo({ version, platform })
       }).catch((e) => console.error('Failed to query electron metadata', e))
     }
+
+    // Check Python backend connection on mount
+    checkBackendConnection()
   }, [])
 
   const handleSave = () => {
+    backendApi.setBaseUrl(`http://127.0.0.1:${pythonPort}`)
     notify('Settings Saved', 'Workspace configuration updated successfully.', 'success')
   }
 
@@ -35,10 +72,10 @@ export const SettingsPage: React.FC = () => {
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       <div className="p-6 rounded-2xl bg-space-850 border border-slate-800 shadow-glass space-y-2">
         <h2 className="text-xl font-bold text-white font-display">
-          Workspace Settings & Desktop Bridge
+          Workspace Settings & Scientific Engine Bridge
         </h2>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Manage astrometric units, display preferences, and prepare for Electron desktop IPC integration.
+          Manage astrometric units, display preferences, and monitor the local Python scientific backend.
         </p>
       </div>
 
@@ -78,41 +115,126 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Desktop & Scientific Bridge Configuration */}
+        {/* Python Scientific Backend Runtime */}
         <div className="space-y-4 pt-4 border-t border-slate-800">
-          <h3 className="text-sm font-semibold text-white font-display flex items-center gap-2 border-b border-slate-800 pb-2">
-            <Cpu className="w-4 h-4 text-astro-violet" />
-            Desktop Runtime & Scientific Bridge (Phase 2 Prep)
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <h3 className="text-sm font-semibold text-white font-display flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-astro-violet" />
+              Python Scientific Engine (Astropy / NumPy)
+            </h3>
+            <button
+              onClick={checkBackendConnection}
+              disabled={isCheckingBackend}
+              className="px-2.5 py-1 text-xs font-mono rounded-lg bg-space-900 hover:bg-space-800 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isCheckingBackend ? 'animate-spin text-astro-cyan' : ''}`} />
+              <span>{isCheckingBackend ? 'Checking...' : 'Test Connection'}</span>
+            </button>
+          </div>
 
-          <div className="p-4 rounded-xl bg-space-900 border border-slate-800 space-y-3 text-xs">
+          <div className="p-4 rounded-xl bg-space-900 border border-slate-800 space-y-3.5 text-xs">
+            {/* Status Indicator */}
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Desktop Runtime Status:</span>
-              {desktopInfo ? (
+              <span className="text-slate-400">Connection Status:</span>
+              {backendHealth ? (
                 <span className="font-mono text-emerald-400 font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Electron v{desktopInfo.version} ({desktopInfo.platform})
+                  <CheckCircle2 className="w-4 h-4" />
+                  Connected ({backendHealth.status.toUpperCase()})
+                </span>
+              ) : backendError ? (
+                <span className="font-mono text-rose-400 font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4" />
+                  Disconnected ({backendError})
                 </span>
               ) : (
-                <span className="font-mono text-slate-300">
-                  Web Browser Mode (IPC Bridge Ready)
+                <span className="font-mono text-amber-400 font-bold flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 animate-pulse" />
+                  Checking connection...
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Security Sandbox & Isolation:</span>
-              <span className="font-mono text-astro-cyan font-medium">
-                Context Isolation Active • Node Integration Disabled
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Scientific Python Backend Port:</span>
-              <input
-                type="text"
-                value={pythonPort}
-                onChange={(e) => setPythonPort(e.target.value)}
-                className="w-24 px-2 py-1 bg-space-850 border border-slate-700 rounded font-mono text-xs text-white text-center"
-              />
+
+            {/* Health & Latency */}
+            {backendHealth && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Backend Version:</span>
+                  <span className="font-mono text-white font-semibold">
+                    v{backendHealth.version} (Uptime: {backendHealth.uptime_seconds}s)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Round-trip Health Check Latency:</span>
+                  <span className="font-mono text-astro-cyan">
+                    {backendLatency} ms
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Last Successful Heartbeat:</span>
+                  <span className="font-mono text-slate-300">
+                    {lastChecked ? lastChecked.toLocaleTimeString() : 'N/A'}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Scientific Dependencies */}
+            {backendSystem && (
+              <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase font-mono">
+                  Scientific Runtime Stack
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="p-2 rounded bg-space-850 border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-400">Python</div>
+                    <div className="font-mono text-xs text-white font-bold">{backendSystem.python_version}</div>
+                  </div>
+                  <div className="p-2 rounded bg-space-850 border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-400">Astropy</div>
+                    <div className="font-mono text-xs text-astro-cyan font-bold">
+                      v{backendSystem.dependencies.astropy || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded bg-space-850 border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-400">NumPy</div>
+                    <div className="font-mono text-xs text-astro-cyan font-bold">
+                      v{backendSystem.dependencies.numpy || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded bg-space-850 border border-slate-800 text-center">
+                    <div className="text-[10px] text-slate-400">FastAPI</div>
+                    <div className="font-mono text-xs text-emerald-400 font-bold">
+                      v{backendSystem.dependencies.fastapi || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Desktop Shell Info */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Desktop Shell:</span>
+                {desktopInfo ? (
+                  <span className="font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Electron v{desktopInfo.version} ({desktopInfo.platform})
+                  </span>
+                ) : (
+                  <span className="font-mono text-slate-400">
+                    Web Browser Mode (Local API Active)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Scientific Backend Port:</span>
+                <input
+                  type="text"
+                  value={pythonPort}
+                  onChange={(e) => setPythonPort(e.target.value)}
+                  className="w-24 px-2 py-1 bg-space-850 border border-slate-700 rounded font-mono text-xs text-white text-center"
+                />
+              </div>
             </div>
           </div>
         </div>
