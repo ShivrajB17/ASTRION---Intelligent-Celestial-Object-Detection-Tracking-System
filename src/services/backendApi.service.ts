@@ -289,6 +289,175 @@ class BackendApiService {
   public getObservationPreviewUrl(id: string): string {
     return `${this.baseUrl}/api/observations/${id}/preview`
   }
+
+  /**
+   * Runs scientific source detection and sub-pixel centroid extraction.
+   */
+  public async runDetection(
+    observationId: string,
+    parameters?: Partial<DetectionParameters>
+  ): Promise<DetectionResponse> {
+    const response = await fetch(`${this.baseUrl}/api/detection/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        observation_id: observationId,
+        parameters: parameters || {},
+      }),
+    })
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`
+      try {
+        const err = await response.json()
+        if (err.detail) detail = err.detail
+      } catch {}
+      throw new Error(`Source detection failed: ${detail}`)
+    }
+    return await response.json()
+  }
+
+  /**
+   * Retrieves existing detection catalog for an observation if available.
+   */
+  public async getDetectionResults(observationId: string): Promise<DetectionResponse | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/detection/${observationId}`)
+      if (!response.ok) return null
+      return await response.json()
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Retrieves 2D background and noise floor modeling metrics.
+   */
+  public async getBackgroundMetadata(observationId: string): Promise<BackgroundMetadataResponse> {
+    const response = await fetch(`${this.baseUrl}/api/detection/${observationId}/background`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch background metadata (HTTP ${response.status})`)
+    }
+    return await response.json()
+  }
+
+  public getDetectionSubtractedPreviewUrl(observationId: string): string {
+    return `${this.baseUrl}/api/detection/${observationId}/preview/subtracted`
+  }
+
+  public getDetectionBackgroundMapPreviewUrl(observationId: string): string {
+    return `${this.baseUrl}/api/detection/${observationId}/preview/background`
+  }
+
+  /**
+   * Registers a target observation against a reference observation using star alignment.
+   */
+  public async runRegistration(
+    referenceObservationId: string,
+    targetObservationId: string
+  ): Promise<RegistrationResponse> {
+    const response = await fetch(`${this.baseUrl}/api/registration/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reference_observation_id: referenceObservationId,
+        target_observation_id: targetObservationId,
+      }),
+    })
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`
+      try {
+        const err = await response.json()
+        if (err.detail) detail = err.detail
+      } catch {}
+      throw new Error(`Registration failed: ${detail}`)
+    }
+    return await response.json()
+  }
+
+  /**
+   * Retrieves existing registration results for a target observation.
+   */
+  public async getRegistrationResults(targetObservationId: string): Promise<RegistrationResponse | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/registration/${targetObservationId}`)
+      if (!response.ok) return null
+      return await response.json()
+    } catch {
+      return null
+    }
+  }
+
+  public getRegisteredPreviewUrl(targetObservationId: string): string {
+    return `${this.baseUrl}/api/registration/${targetObservationId}/preview`
+  }
+}
+
+export interface DetectionParameters {
+  threshold_sigma: number
+  fwhm_pixels: number
+  box_size: number
+  filter_size: number
+  algorithm: string
+}
+
+export interface DetectedSource {
+  id: string
+  source_number: number
+  x: number
+  y: number
+  centroid_x: number
+  centroid_y: number
+  centroid_uncertainty: number
+  ra_deg: number | null
+  dec_deg: number | null
+  sky_coord_available: boolean
+  peak: number
+  flux: number
+  fwhm: number
+  snr: number
+  sharpness: number | null
+  roundness: number | null
+  flags: number
+  quality: string
+}
+
+export interface DetectionResponse {
+  run_id: string
+  observation_id: string
+  source_count: number
+  background_median: number
+  background_rms: number
+  parameters: DetectionParameters
+  sources: DetectedSource[]
+  execution_time_ms: number
+  bkg_subtracted_preview_url: string | null
+  bkg_map_preview_url: string | null
+}
+
+export interface BackgroundMetadataResponse {
+  observation_id: string
+  background_median: number
+  background_rms: number
+  box_size: number
+  filter_size: number
+  bkg_subtracted_preview_url: string | null
+  bkg_map_preview_url: string | null
+}
+
+export interface RegistrationResponse {
+  run_id: string
+  reference_observation_id: string
+  target_observation_id: string
+  success: boolean
+  rotation_deg: number
+  translation_x: number
+  translation_y: number
+  scale: number
+  residual_rms: number
+  matched_stars_count: number
+  transformation_matrix: number[][]
+  registered_preview_url: string | null
+  message: string
 }
 
 export interface PixelStatistics {

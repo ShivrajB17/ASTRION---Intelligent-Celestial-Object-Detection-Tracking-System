@@ -28,6 +28,7 @@ class Settings:
     DATA_DIR: str = os.getenv("ASTRION_DATA_DIR", os.path.join(BASE_DIR, "data"))
     OBSERVATIONS_DIR: str = os.path.join(DATA_DIR, "observations")
     PREVIEWS_DIR: str = os.path.join(DATA_DIR, "previews")
+    REGISTERED_DIR: str = os.path.join(DATA_DIR, "registered")
     DATABASE_PATH: str = os.getenv("ASTRION_DB_PATH", os.path.join(DATA_DIR, "astrion.db"))
 
     def ensure_directories(self) -> None:
@@ -35,6 +36,7 @@ class Settings:
         os.makedirs(self.DATA_DIR, exist_ok=True)
         os.makedirs(self.OBSERVATIONS_DIR, exist_ok=True)
         os.makedirs(self.PREVIEWS_DIR, exist_ok=True)
+        os.makedirs(self.REGISTERED_DIR, exist_ok=True)
 
 
 settings = Settings()

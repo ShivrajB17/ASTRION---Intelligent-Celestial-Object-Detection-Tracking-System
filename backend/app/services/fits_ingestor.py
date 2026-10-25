@@ -217,6 +217,42 @@ class FitsIngestionService:
             raise ValueError(f"Failed to parse FITS data: {exc}") from exc
 
     @classmethod
+    def load_observation_data_and_header(
+        cls,
+        obs_id: str,
+    ) -> Tuple[np.ndarray, fits.Header, ObservationRecord]:
+        """Loads the selected science HDU 2D array and header for an ingested observation.
+        
+        Guarantees returned array is a 2D float32 NumPy array and never mutates original.
+        """
+        obs = observation_repo.get_by_id(obs_id)
+        if not obs:
+            raise ValueError(f"Observation '{obs_id}' not found in registry.")
+
+        file_path = observation_repo.get_file_path(obs_id)
+        if not file_path or not os.path.exists(file_path):
+            raise FileNotFoundError(f"FITS file for observation '{obs_id}' not found on disk at {file_path}.")
+
+        with fits.open(file_path, memmap=True) as hdul:
+            hdu_idx = obs.selected_hdu_index
+            if hdu_idx >= len(hdul):
+                hdu_idx = 0
+            hdu = hdul[hdu_idx]
+            data = getattr(hdu, "data", None)
+            if data is None:
+                raise ValueError(f"Selected HDU #{hdu_idx} in '{obs.filename}' contains no image data.")
+
+            arr = np.squeeze(data).astype(np.float32, copy=True)
+            if arr.ndim == 3 and arr.shape[0] in (1, 3):
+                arr = arr[0, :, :]
+            if arr.ndim != 2:
+                raise ValueError(f"Expected 2D image data, got shape {arr.shape}")
+
+            header = hdu.header.copy()
+
+        return arr, header, obs
+
+    @classmethod
     def _select_science_hdu(cls, hdul: fits.HDUList) -> int:
         """Selects the best science image HDU from the HDU list.
         

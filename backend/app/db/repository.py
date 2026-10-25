@@ -80,6 +80,48 @@ class ObservationRepository:
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_obs_hash ON observations(file_hash);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_obs_created ON observations(created_at);")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS detection_runs (
+                    run_id TEXT PRIMARY KEY,
+                    observation_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    source_count INTEGER NOT NULL,
+                    background_median REAL NOT NULL,
+                    background_rms REAL NOT NULL,
+                    parameters_json TEXT NOT NULL,
+                    sources_json TEXT NOT NULL,
+                    execution_time_ms REAL NOT NULL,
+                    bkg_subtracted_preview_path TEXT,
+                    bkg_map_preview_path TEXT
+                );
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_detection_obs ON detection_runs(observation_id);")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS registration_runs (
+                    run_id TEXT PRIMARY KEY,
+                    reference_observation_id TEXT NOT NULL,
+                    target_observation_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    rotation_deg REAL NOT NULL DEFAULT 0.0,
+                    translation_x REAL NOT NULL DEFAULT 0.0,
+                    translation_y REAL NOT NULL DEFAULT 0.0,
+                    scale REAL NOT NULL DEFAULT 1.0,
+                    residual_rms REAL NOT NULL DEFAULT 0.0,
+                    matched_stars_count INTEGER NOT NULL DEFAULT 0,
+                    transformation_matrix_json TEXT,
+                    registered_fits_path TEXT,
+                    registered_preview_path TEXT,
+                    message TEXT NOT NULL
+                );
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_reg_target ON registration_runs(target_observation_id);")
             conn.commit()
 
     def insert(
@@ -319,6 +361,149 @@ class ObservationRepository:
             has_preview=has_preview,
             preview_url=preview_url,
         )
+
+    def save_detection_run(
+        self,
+        run_id: str,
+        observation_id: str,
+        created_at: str,
+        source_count: int,
+        background_median: float,
+        background_rms: float,
+        parameters_dict: Dict[str, Any],
+        sources_list: List[Dict[str, Any]],
+        execution_time_ms: float,
+        bkg_subtracted_preview_path: Optional[str] = None,
+        bkg_map_preview_path: Optional[str] = None,
+    ) -> None:
+        """Saves a source detection run record."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO detection_runs (
+                    run_id, observation_id, created_at, source_count,
+                    background_median, background_rms, parameters_json,
+                    sources_json, execution_time_ms, bkg_subtracted_preview_path,
+                    bkg_map_preview_path
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    run_id,
+                    observation_id,
+                    created_at,
+                    source_count,
+                    background_median,
+                    background_rms,
+                    json.dumps(parameters_dict),
+                    json.dumps(sources_list),
+                    execution_time_ms,
+                    bkg_subtracted_preview_path,
+                    bkg_map_preview_path,
+                ),
+            )
+            conn.commit()
+
+    def get_latest_detection_run(self, observation_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves the latest source detection run for an observation."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM detection_runs WHERE observation_id = ? ORDER BY created_at DESC LIMIT 1;",
+                (observation_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "run_id": row["run_id"],
+                "observation_id": row["observation_id"],
+                "created_at": row["created_at"],
+                "source_count": row["source_count"],
+                "background_median": row["background_median"],
+                "background_rms": row["background_rms"],
+                "parameters": json.loads(row["parameters_json"]) if row["parameters_json"] else {},
+                "sources": json.loads(row["sources_json"]) if row["sources_json"] else [],
+                "execution_time_ms": row["execution_time_ms"],
+                "bkg_subtracted_preview_path": row["bkg_subtracted_preview_path"],
+                "bkg_map_preview_path": row["bkg_map_preview_path"],
+            }
+
+    def save_registration_run(
+        self,
+        run_id: str,
+        reference_observation_id: str,
+        target_observation_id: str,
+        created_at: str,
+        success: bool,
+        rotation_deg: float,
+        translation_x: float,
+        translation_y: float,
+        scale: float,
+        residual_rms: float,
+        matched_stars_count: int,
+        transformation_matrix: List[List[float]],
+        message: str,
+        registered_fits_path: Optional[str] = None,
+        registered_preview_path: Optional[str] = None,
+    ) -> None:
+        """Saves an image registration run record."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO registration_runs (
+                    run_id, reference_observation_id, target_observation_id,
+                    created_at, success, rotation_deg, translation_x,
+                    translation_y, scale, residual_rms, matched_stars_count,
+                    transformation_matrix_json, registered_fits_path,
+                    registered_preview_path, message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    run_id,
+                    reference_observation_id,
+                    target_observation_id,
+                    created_at,
+                    1 if success else 0,
+                    rotation_deg,
+                    translation_x,
+                    translation_y,
+                    scale,
+                    residual_rms,
+                    matched_stars_count,
+                    json.dumps(transformation_matrix),
+                    registered_fits_path,
+                    registered_preview_path,
+                    message,
+                ),
+            )
+            conn.commit()
+
+    def get_latest_registration_run(self, target_observation_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves the latest registration run for a target observation."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM registration_runs WHERE target_observation_id = ? ORDER BY created_at DESC LIMIT 1;",
+                (target_observation_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "run_id": row["run_id"],
+                "reference_observation_id": row["reference_observation_id"],
+                "target_observation_id": row["target_observation_id"],
+                "created_at": row["created_at"],
+                "success": bool(row["success"]),
+                "rotation_deg": row["rotation_deg"],
+                "translation_x": row["translation_x"],
+                "translation_y": row["translation_y"],
+                "scale": row["scale"],
+                "residual_rms": row["residual_rms"],
+                "matched_stars_count": row["matched_stars_count"],
+                "transformation_matrix": json.loads(row["transformation_matrix_json"]) if row["transformation_matrix_json"] else [],
+                "registered_fits_path": row["registered_fits_path"],
+                "registered_preview_path": row["registered_preview_path"],
+                "message": row["message"],
+            }
 
 
 observation_repo = ObservationRepository()

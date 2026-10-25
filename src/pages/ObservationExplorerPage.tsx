@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   UploadCloud, 
   ZoomIn, 
@@ -13,6 +13,8 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useAstrion } from '../context/AstrionContext'
+import { backendApi, type RegistrationResponse } from '../services/backendApi.service'
+import { ImageRegistrationService } from '../services/imageRegistration.service'
 
 export const ObservationExplorerPage: React.FC = () => {
   const { observations, selectedObservation, setSelectedObservation, setIsImportModalOpen, removeObservation, notify } = useAstrion()
@@ -21,8 +23,48 @@ export const ObservationExplorerPage: React.FC = () => {
   const [contrastStretch, setContrastStretch] = useState<'linear' | 'log' | 'asinh' | 'zscale'>('zscale')
   const [showGrid, setShowGrid] = useState(true)
   const [showReticle, setShowReticle] = useState(true)
+  const [registration, setRegistration] = useState<RegistrationResponse | null>(null)
+  const [showRegistered, setShowRegistered] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
+  const [selectedRefId, setSelectedRefId] = useState<string>('')
 
   const activeObs = selectedObservation || (observations.length > 0 ? observations[0] : null)
+
+  useEffect(() => {
+    if (!activeObs) return
+    let isMounted = true
+    backendApi.getRegistrationResults(activeObs.id).then((reg) => {
+      if (isMounted) {
+        setRegistration(reg)
+        setShowRegistered(false)
+      }
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [activeObs?.id])
+
+  const handleRegisterActiveObs = async () => {
+    if (!activeObs) return
+    if (!selectedRefId) {
+      notify('Select Reference Frame', 'Please choose a reference observation to align against.', 'warning')
+      return
+    }
+
+    setIsRegistering(true)
+    notify('Registration Dispatched', `Aligning ${activeObs.filename} against reference...`, 'info')
+
+    const result = await ImageRegistrationService.registerFrames(selectedRefId, activeObs.id)
+    setIsRegistering(false)
+
+    if (result.success && result.data) {
+      setRegistration(result.data)
+      setShowRegistered(true)
+      notify('Registration Successful', result.data.message, 'success')
+    } else {
+      notify('Registration Failed', result.error?.message || 'Could not align observation frames.', 'error')
+    }
+  }
 
   const getColormapFilter = () => {
     switch (colorMap) {
@@ -149,11 +191,16 @@ export const ObservationExplorerPage: React.FC = () => {
                 {activeObs?.hasPreview && activeObs?.previewUrl ? (
                   <div className="relative flex items-center justify-center p-4 max-w-full max-h-full">
                     <img
-                      src={activeObs.previewUrl}
+                      src={showRegistered && registration?.registered_preview_url ? registration.registered_preview_url : activeObs.previewUrl}
                       alt={activeObs.filename}
                       className="max-w-[460px] max-h-[440px] object-contain rounded-lg shadow-2xl pointer-events-none border border-slate-800"
                       style={{ filter: getColormapFilter() }}
                     />
+                    {showRegistered && (
+                      <div className="absolute top-6 left-6 px-2 py-0.5 rounded bg-astro-cyan/20 border border-astro-cyan/40 text-[10px] font-mono text-astro-cyan font-bold backdrop-blur-md">
+                        REGISTERED WARPED VIEW
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* Fallback when viewing template benchmark before real upload */
@@ -416,6 +463,88 @@ export const ObservationExplorerPage: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Astrometric Registration Panel */}
+            <div className="pt-2 border-t border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 font-display">
+                  <Layers className="w-3.5 h-3.5 text-astro-cyan" />
+                  Image Registration (Astroalign)
+                </h4>
+                {registration?.success ? (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    ALIGNED
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                    UNALIGNED
+                  </span>
+                )}
+              </div>
+
+              {registration?.success ? (
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-space-900/60 border border-slate-800 text-[11px] font-mono text-slate-300">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Rotation:</span>
+                    <span className="text-white font-bold">{registration.rotation_deg.toFixed(3)}°</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Translation (X, Y):</span>
+                    <span className="text-white">({registration.translation_x.toFixed(2)}, {registration.translation_y.toFixed(2)}) px</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Scale Factor:</span>
+                    <span className="text-white">{registration.scale.toFixed(4)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Residual RMS:</span>
+                    <span className="text-astro-cyan font-bold">{registration.residual_rms.toFixed(3)} px</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Matched Stars:</span>
+                    <span className="text-emerald-400 font-bold">{registration.matched_stars_count} stars</span>
+                  </div>
+
+                  {registration.registered_preview_url && (
+                    <button
+                      onClick={() => setShowRegistered((prev) => !prev)}
+                      className={`w-full mt-2 py-1 px-2 rounded text-xs font-mono transition-colors border ${
+                        showRegistered
+                          ? 'bg-astro-cyan/20 text-astro-cyan border-astro-cyan/40 font-bold'
+                          : 'bg-space-800 text-slate-300 border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {showRegistered ? 'View Original Frame' : 'View Registered Aligned Frame'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 p-2.5 rounded-xl bg-space-900/60 border border-slate-800 text-xs">
+                  <label className="text-[11px] text-slate-400 block font-mono">Select Anchor Reference Frame:</label>
+                  <select
+                    value={selectedRefId}
+                    onChange={(e) => setSelectedRefId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-space-850 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-astro-blue font-mono"
+                  >
+                    <option value="">-- Choose Reference Observation --</option>
+                    {observations
+                      .filter((o) => o.id !== activeObs?.id)
+                      .map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.filename}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleRegisterActiveObs}
+                    disabled={isRegistering || !selectedRefId}
+                    className="w-full py-1.5 rounded-lg bg-astro-blue hover:bg-blue-600 text-white font-semibold text-xs transition-colors disabled:opacity-50"
+                  >
+                    {isRegistering ? 'Registering...' : 'Register Against Reference'}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Action Buttons */}
             <div className="pt-2 space-y-2">

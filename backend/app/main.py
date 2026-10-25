@@ -14,6 +14,8 @@ from backend.app.api.fits import router as fits_router
 from backend.app.api.health import router as health_router
 from backend.app.api.observations import router as observations_router
 from backend.app.api.system import router as system_router
+from backend.app.api.detection import router as detection_router
+from backend.app.api.registration import router as registration_router
 from backend.app.config import settings
 
 
@@ -64,6 +66,8 @@ app.include_router(health_router)
 app.include_router(system_router)
 app.include_router(fits_router)
 app.include_router(observations_router)
+app.include_router(detection_router)
+app.include_router(registration_router)
 
 
 @app.get("/", tags=["Root"])

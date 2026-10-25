@@ -1,3 +1,4 @@
+import { backendApi, type RegistrationResponse as ApiRegistrationResponse } from './backendApi.service'
 import type { ServiceResult } from './api.types'
 
 export interface AlignmentMatrix {
@@ -10,20 +11,32 @@ export interface AlignmentMatrix {
 
 export class ImageRegistrationService {
   /**
-   * Aligns multi-epoch FITS frames via WCS coordinate projection or point-set matching (Astroalign / OpenCV).
+   * Aligns multi-epoch FITS frames via star-based triangulation (Astroalign / SimilarityTransform).
    */
   public static async registerFrames(
     referenceObsId: string,
-    targetObsIds: string[]
-  ): Promise<ServiceResult<{ reference: string; aligned: string[]; matrices: Record<string, AlignmentMatrix> }>> {
-    console.debug(`[ImageRegistrationService] Frame alignment requested: ${referenceObsId} against ${targetObsIds.length} frames`)
-    return {
-      success: false,
-      error: {
-        code: 'AWAITING_SCIENTIFIC_BACKEND',
-        message: 'Awaiting image registration engine (Astroalign / WCS reproject).',
-      },
-      timestamp: new Date().toISOString(),
+    targetObsId: string
+  ): Promise<ServiceResult<ApiRegistrationResponse>> {
+    try {
+      const result = await backendApi.runRegistration(referenceObsId, targetObsId)
+      return {
+        success: result.success,
+        data: result,
+        error: result.success ? undefined : {
+          code: 'REGISTRATION_CONVERGENCE_FAILED',
+          message: result.message,
+        },
+        timestamp: new Date().toISOString(),
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: 'REGISTRATION_API_ERROR',
+          message: err.message || 'Image registration failed.',
+        },
+        timestamp: new Date().toISOString(),
+      }
     }
   }
 }

@@ -14,6 +14,17 @@ from backend.app.models.observation import (
     ObservationListResponse,
     IngestResponse,
 )
+from backend.app.models.detection import (
+    DetectionParameters,
+    DetectedSource,
+    DetectionRequest,
+    DetectionResponse,
+    BackgroundMetadataResponse,
+)
+from backend.app.models.registration import (
+    RegistrationRequest,
+    RegistrationResponse,
+)
 
 __all__ = [
     "HealthResponse",
@@ -26,4 +37,11 @@ __all__ = [
     "ObservationRecord",
     "ObservationListResponse",
     "IngestResponse",
+    "DetectionParameters",
+    "DetectedSource",
+    "DetectionRequest",
+    "DetectionResponse",
+    "BackgroundMetadataResponse",
+    "RegistrationRequest",
+    "RegistrationResponse",
 ]
