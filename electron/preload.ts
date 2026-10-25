@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AstrionDesktopAPI } from './types.d.ts'
+import type { AstrionDesktopAPI, BackendProcessStatus } from './types.d.ts'
 
 const desktopAPI: AstrionDesktopAPI = {
   isElectron: true,
@@ -23,6 +23,20 @@ const desktopAPI: AstrionDesktopAPI = {
 
   getBackendStatus: async () => {
     return ipcRenderer.invoke('astrion:get-backend-status')
+  },
+
+  restartBackend: async () => {
+    return ipcRenderer.invoke('astrion:restart-backend')
+  },
+
+  onBackendStatusChange: (callback: (status: BackendProcessStatus) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: BackendProcessStatus) => {
+      callback(status)
+    }
+    ipcRenderer.on('astrion:backend-status-changed', handler)
+    return () => {
+      ipcRenderer.removeListener('astrion:backend-status-changed', handler)
+    }
   },
 }
 

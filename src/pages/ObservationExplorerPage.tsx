@@ -237,55 +237,87 @@ export const ObservationExplorerPage: React.FC = () => {
                 <FileCode className="w-4 h-4 text-astro-cyan" />
                 FITS Header Metadata
               </h3>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-space-900 text-slate-400">
-                PRIMARY HDU
-              </span>
+              {activeObs?.inspectionSource === 'astropy_backend' ? (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  ASTROPY VALIDATED
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-space-900 text-slate-400 border border-slate-800">
+                  PRIMARY HDU
+                </span>
+              )}
             </div>
 
             {/* Metadata Fields */}
             <div className="space-y-3 text-xs font-mono">
               <div className="flex justify-between py-1 border-b border-slate-850">
                 <span className="text-slate-500">OBJECT:</span>
-                <span className="text-slate-200 font-semibold">{activeObs?.targetName || 'NEO-TARGET-FIELD'}</span>
+                <span className="text-slate-200 font-semibold">{activeObs?.targetName || 'UNTITLED'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-850">
                 <span className="text-slate-500">TELESCOPE:</span>
-                <span className="text-slate-200">{activeObs?.telescope || 'SPHEREx All-Sky Surveyor'}</span>
+                <span className="text-slate-200">{activeObs?.telescope || 'N/A'}</span>
               </div>
+              {activeObs?.instrument && (
+                <div className="flex justify-between py-1 border-b border-slate-850">
+                  <span className="text-slate-500">INSTRUMENT:</span>
+                  <span className="text-slate-200">{activeObs.instrument}</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-slate-850">
                 <span className="text-slate-500">FILTER BAND:</span>
-                <span className="text-astro-cyan">{activeObs?.filterBand || 'V-Band (Optical 550nm)'}</span>
+                <span className="text-astro-cyan">{activeObs?.filterBand || 'N/A'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-850">
                 <span className="text-slate-500">EXPOSURE:</span>
-                <span className="text-slate-200">180.000 s</span>
+                <span className="text-slate-200">{activeObs?.exptime != null ? `${activeObs.exptime} s` : 'N/A'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-850">
-                <span className="text-slate-500">EQUINOX:</span>
-                <span className="text-slate-200">J2000.0</span>
+                <span className="text-slate-500">RA / DEC:</span>
+                <span className="text-slate-200">
+                  {activeObs?.raCenter != null && activeObs?.decCenter != null
+                    ? `${activeObs.raCenter.toFixed(4)}°, ${activeObs.decCenter.toFixed(4)}°`
+                    : 'N/A'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-850">
-                <span className="text-slate-500">WCS CTYPE1:</span>
-                <span className="text-slate-200">RA---TAN</span>
+                <span className="text-slate-500">WCS CALIBRATION:</span>
+                <span className={activeObs?.wcsAvailable ? 'text-emerald-400' : 'text-slate-400'}>
+                  {activeObs?.wcsAvailable ? 'Celestial Validated' : 'Uncalibrated'}
+                </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-850">
-                <span className="text-slate-500">WCS CTYPE2:</span>
-                <span className="text-slate-200">DEC--TAN</span>
-              </div>
+              {activeObs?.pixelScaleArcsec != null && (
+                <div className="flex justify-between py-1 border-b border-slate-850">
+                  <span className="text-slate-500">PIXEL SCALE:</span>
+                  <span className="text-astro-cyan">{activeObs.pixelScaleArcsec}″/px</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-slate-850">
                 <span className="text-slate-500">BITPIX:</span>
-                <span className="text-slate-200">-32 (Single Float)</span>
+                <span className="text-slate-200">{activeObs?.bitpix != null ? `${activeObs.bitpix}` : 'N/A'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-850">
-                <span className="text-slate-500">NAXIS:</span>
-                <span className="text-slate-200">2 (2048 × 2048)</span>
+                <span className="text-slate-500">DIMENSIONS:</span>
+                <span className="text-slate-200">
+                  {activeObs?.dimensions ? `${activeObs.dimensions.width} × ${activeObs.dimensions.height} px` : 'N/A'}
+                </span>
               </div>
             </div>
 
             {/* Quick Astrometric Actions */}
             <div className="pt-2 space-y-2">
               <button
-                onClick={() => notify('FITS Header Export', 'Copied standard FITS 80-char header card to clipboard.', 'success')}
+                onClick={() => {
+                  if (activeObs?.headersSummary && Object.keys(activeObs.headersSummary).length > 0) {
+                    const text = Object.entries(activeObs.headersSummary)
+                      .map(([k, v]) => `${k.padEnd(8)} = ${v}`)
+                      .join('\n')
+                    navigator.clipboard.writeText(text)
+                    notify('FITS Header Export', 'Copied authentic Astropy header cards to clipboard.', 'success')
+                  } else {
+                    notify('Header Export', 'No additional header cards stored for this frame.', 'info')
+                  }
+                }}
                 className="w-full py-2 px-3 rounded-xl bg-space-800 hover:bg-space-750 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition-colors"
               >
                 Copy Raw Header Cards

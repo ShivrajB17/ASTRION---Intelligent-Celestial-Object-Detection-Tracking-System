@@ -59,7 +59,7 @@ const SAMPLE_ASTRONOMICAL_DATASETS: Array<{
 ]
 
 export const FITSImportModal: React.FC = () => {
-  const { isImportModalOpen, setIsImportModalOpen, addObservations } = useAstrion()
+  const { isImportModalOpen, setIsImportModalOpen, addObservations, notify } = useAstrion()
   const [dragOver, setDragOver] = useState(false)
   const [stagedFiles, setStagedFiles] = useState<FitsObservation[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
@@ -77,21 +77,37 @@ export const FITSImportModal: React.FC = () => {
         sizeBytes: insp.file_size_bytes,
         uploadedAt: new Date().toISOString(),
         targetName: insp.object_name || file.name.replace(/\.(fits|fit|fts|gz)$/i, ''),
-        filterBand: insp.filter_band || 'Astropy Band',
-        telescope: insp.telescope || 'Astropy Engine',
+        filterBand: insp.filter_band || 'Scientific Band',
+        telescope: insp.telescope || 'Astronomical Instrument',
+        instrument: insp.instrument || undefined,
+        epochTime: insp.date_obs || undefined,
+        exptime: insp.exptime ?? undefined,
+        bitpix: insp.bitpix ?? undefined,
         raCenter: insp.ra_deg ?? undefined,
         decCenter: insp.dec_deg ?? undefined,
+        wcsAvailable: insp.wcs_available,
+        pixelScaleArcsec: insp.pixel_scale_arcsec ?? undefined,
+        headersSummary: insp.headers_summary,
+        inspectionSource: 'astropy_backend',
         status: 'raw',
         dimensions: insp.dimensions
-          ? { width: insp.dimensions.width || 2048, height: insp.dimensions.height || 2048 }
+          ? { width: insp.dimensions.width || 2048, height: insp.dimensions.height || 2048, naxis: insp.dimensions.naxis }
           : undefined,
       }
-    } catch {
+    } catch (err: any) {
+      if (err.message && err.message.includes('FITS inspection failed')) {
+        notify('FITS Inspection Error', err.message, 'error')
+        return null
+      }
       // 2. Graceful fallback to client-side reader if backend is offline
       const clientResult = await FitsIngestionService.parseLocalFileMetadata(file)
       if (clientResult.success && clientResult.data) {
-        return clientResult.data
+        return {
+          ...clientResult.data,
+          inspectionSource: 'client_parser',
+        }
       }
+      notify('FITS Parsing Error', clientResult.error?.message || 'Failed to parse file.', 'error')
       return null
     }
   }
@@ -174,6 +190,7 @@ export const FITSImportModal: React.FC = () => {
       raCenter: sample.ra,
       decCenter: sample.dec,
       status: 'raw',
+      inspectionSource: 'sample_benchmark',
       dimensions: { width: 2048, height: 2048 },
     }
     setStagedFiles((prev) => [...prev, obs])

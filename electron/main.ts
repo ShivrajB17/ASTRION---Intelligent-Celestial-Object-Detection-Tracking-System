@@ -38,25 +38,32 @@ function createWindow(): BrowserWindow {
 
   // Intercept window open requests to launch external links in the default macOS browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://') || url.startsWith('http://')) {
-      shell.openExternal(url).catch((err) => {
-        console.error('[ASTRION Main] Failed to open external link:', err)
-      })
-    }
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(parsed.href).catch((err) => {
+          console.error('[ASTRION Main] Failed to open external link:', err)
+        })
+      }
+    } catch {}
     return { action: 'deny' }
   })
 
   // Security: prevent renderer navigation away from allowed local origins
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
-    const parsed = new URL(navigationUrl)
-    const isLocalDev = parsed.origin === 'http://127.0.0.1:5173' || parsed.origin === 'http://localhost:5173'
-    const isLocalFile = parsed.protocol === 'file:'
+    try {
+      const parsed = new URL(navigationUrl)
+      const isLocalDev = parsed.origin === 'http://127.0.0.1:5173' || parsed.origin === 'http://localhost:5173'
+      const isLocalFile = parsed.protocol === 'file:'
 
-    if (!isLocalDev && !isLocalFile) {
-      event.preventDefault()
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-        shell.openExternal(navigationUrl).catch(console.error)
+      if (!isLocalDev && !isLocalFile) {
+        event.preventDefault()
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          shell.openExternal(parsed.href).catch(console.error)
+        }
       }
+    } catch {
+      event.preventDefault()
     }
   })
 
@@ -110,20 +117,37 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('astrion:open-external-url', async (_event, url: string) => {
-    if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
-      await shell.openExternal(url)
+  ipcMain.handle('astrion:open-external-url', async (_event, rawUrl: string) => {
+    if (typeof rawUrl !== 'string') return
+    try {
+      const parsed = new URL(rawUrl)
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        await shell.openExternal(parsed.href)
+      }
+    } catch {
+      console.warn('[ASTRION Main] Rejected invalid external URL:', rawUrl)
     }
   })
 
   ipcMain.handle('astrion:get-backend-status', () => {
     return backendManager.getStatus()
   })
+
+  ipcMain.handle('astrion:restart-backend', async () => {
+    return backendManager.restart()
+  })
 }
 
 // Application Lifecycle
 app.whenReady().then(async () => {
   registerIpcHandlers()
+
+  // Subscribe to backend status updates to notify the frontend
+  backendManager.onStatusChange((status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('astrion:backend-status-changed', status)
+    }
+  })
 
   // Launch Python backend process asynchronously
   backendManager.start().catch((err) => {
@@ -147,6 +171,16 @@ app.on('before-quit', () => {
 
 process.on('exit', () => {
   backendManager.stop()
+})
+
+process.on('SIGINT', () => {
+  backendManager.stop()
+  app.quit()
+})
+
+process.on('SIGTERM', () => {
+  backendManager.stop()
+  app.quit()
 })
 
 // macOS standard behavior: keep application running in dock when all windows are closed

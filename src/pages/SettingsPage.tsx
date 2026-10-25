@@ -44,6 +44,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   useEffect(() => {
+    let unsubscribeStatus: (() => void) | undefined
     if (window.astrion?.isElectron) {
       Promise.all([
         window.astrion.getVersion?.() ?? Promise.resolve('Unknown'),
@@ -51,11 +52,41 @@ export const SettingsPage: React.FC = () => {
       ]).then(([version, platform]) => {
         setDesktopInfo({ version, platform })
       }).catch((e) => console.error('Failed to query electron metadata', e))
+
+      if (window.astrion.onBackendStatusChange) {
+        unsubscribeStatus = window.astrion.onBackendStatusChange((status) => {
+          if (status.ready) {
+            checkBackendConnection()
+          } else if (!status.running) {
+            setBackendHealth(null)
+            setBackendError(status.error || 'Backend process offline')
+          }
+        })
+      }
     }
 
     // Check Python backend connection on mount
     checkBackendConnection()
+
+    return () => {
+      unsubscribeStatus?.()
+    }
   }, [])
+
+  const handleRestartEngine = async () => {
+    if (!window.astrion?.restartBackend) return
+    setIsCheckingBackend(true)
+    notify('Engine Restarting', 'Triggering clean restart of the Python scientific backend...', 'info')
+    try {
+      await window.astrion.restartBackend()
+      await checkBackendConnection()
+      notify('Engine Ready', 'Python scientific backend successfully restarted.', 'success')
+    } catch (err: any) {
+      notify('Restart Error', err.message || 'Failed to restart backend process.', 'error')
+    } finally {
+      setIsCheckingBackend(false)
+    }
+  }
 
   const handleSave = () => {
     backendApi.setBaseUrl(`http://127.0.0.1:${pythonPort}`)
@@ -122,14 +153,27 @@ export const SettingsPage: React.FC = () => {
               <Cpu className="w-4 h-4 text-astro-violet" />
               Python Scientific Engine (Astropy / NumPy)
             </h3>
-            <button
-              onClick={checkBackendConnection}
-              disabled={isCheckingBackend}
-              className="px-2.5 py-1 text-xs font-mono rounded-lg bg-space-900 hover:bg-space-800 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3 h-3 ${isCheckingBackend ? 'animate-spin text-astro-cyan' : ''}`} />
-              <span>{isCheckingBackend ? 'Checking...' : 'Test Connection'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {window.astrion?.isElectron && (
+                <button
+                  onClick={handleRestartEngine}
+                  disabled={isCheckingBackend}
+                  className="px-2.5 py-1 text-xs font-mono rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  title="Restart Python backend process"
+                >
+                  <RotateCcw className="w-3 h-3 text-rose-400" />
+                  <span>Restart Engine</span>
+                </button>
+              )}
+              <button
+                onClick={checkBackendConnection}
+                disabled={isCheckingBackend}
+                className="px-2.5 py-1 text-xs font-mono rounded-lg bg-space-900 hover:bg-space-800 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isCheckingBackend ? 'animate-spin text-astro-cyan' : ''}`} />
+                <span>{isCheckingBackend ? 'Checking...' : 'Test Connection'}</span>
+              </button>
+            </div>
           </div>
 
           <div className="p-4 rounded-xl bg-space-900 border border-slate-800 space-y-3.5 text-xs">

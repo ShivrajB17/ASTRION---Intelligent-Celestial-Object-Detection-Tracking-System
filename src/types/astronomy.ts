@@ -20,8 +20,15 @@ export interface FitsObservation {
   decCenter?: number // Declination in degrees
   filterBand?: string
   telescope?: string
+  instrument?: string
   epochTime?: string
-  dimensions?: { width: number; height: number }
+  exptime?: number
+  bitpix?: number
+  dimensions?: { width: number; height: number; naxis?: number }
+  wcsAvailable?: boolean
+  pixelScaleArcsec?: number
+  headersSummary?: Record<string, string | number | boolean>
+  inspectionSource?: 'astropy_backend' | 'client_parser' | 'sample_benchmark'
   status: 'raw' | 'preprocessed' | 'analyzed'
 }
 

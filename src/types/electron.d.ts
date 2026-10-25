@@ -14,6 +14,7 @@ export interface BackendProcessStatus {
   url: string
   error?: string
   pid?: number
+  restarts?: number
 }
 
 export interface AstrionDesktopAPI {
@@ -23,6 +24,8 @@ export interface AstrionDesktopAPI {
   selectFitsFiles: () => Promise<NativeFileSelectionResult>
   openExternalUrl: (url: string) => Promise<void>
   getBackendStatus: () => Promise<BackendProcessStatus>
+  restartBackend: () => Promise<BackendProcessStatus>
+  onBackendStatusChange: (callback: (status: BackendProcessStatus) => void) => () => void
 }
 
 declare global {

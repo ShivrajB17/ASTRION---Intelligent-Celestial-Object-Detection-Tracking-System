@@ -131,27 +131,33 @@ class FitsInspectorService:
             image_hdu = primary_hdu
 
         header = getattr(image_hdu, "header", fits.Header())
+        primary_header = getattr(primary_hdu, "header", fits.Header())
 
         # Extract dimensions
         dimensions = cls._extract_dimensions(header)
 
-        # Extract basic cards safely
-        bitpix = cls._get_int(header, "BITPIX")
-        date_obs = cls._get_str(header, ["DATE-OBS", "DATE_OBS", "DATE"])
-        exptime = cls._get_float(header, ["EXPTIME", "EXPOSURE", "TELAPSE"])
-        telescope = cls._get_str(header, ["TELESCOP", "TELESCOPE", "OBSERVAT"])
-        instrument = cls._get_str(header, ["INSTRUME", "INSTRUMENT", "CAMERA", "DETECTOR"])
-        object_name = cls._get_str(header, ["OBJECT", "TARGNAME", "TARGET"])
-        filter_band = cls._get_str(header, ["FILTER", "FILTNAM", "BAND", "PASSBAND"])
+        # Extract basic cards safely (checking image extension header first, then primary header)
+        bitpix = cls._get_int(header, "BITPIX") or cls._get_int(primary_header, "BITPIX")
+        date_obs = cls._get_str(header, ["DATE-OBS", "DATE_OBS", "DATE"]) or cls._get_str(primary_header, ["DATE-OBS", "DATE_OBS", "DATE"])
+        exptime = cls._get_float(header, ["EXPTIME", "EXPOSURE", "TELAPSE"]) or cls._get_float(primary_header, ["EXPTIME", "EXPOSURE", "TELAPSE"])
+        telescope = cls._get_str(header, ["TELESCOP", "TELESCOPE", "OBSERVAT"]) or cls._get_str(primary_header, ["TELESCOP", "TELESCOPE", "OBSERVAT"])
+        instrument = cls._get_str(header, ["INSTRUME", "INSTRUMENT", "CAMERA", "DETECTOR"]) or cls._get_str(primary_header, ["INSTRUME", "INSTRUMENT", "CAMERA", "DETECTOR"])
+        object_name = cls._get_str(header, ["OBJECT", "TARGNAME", "TARGET"]) or cls._get_str(primary_header, ["OBJECT", "TARGNAME", "TARGET"])
+        filter_band = cls._get_str(header, ["FILTER", "FILTNAM", "BAND", "PASSBAND"]) or cls._get_str(primary_header, ["FILTER", "FILTNAM", "BAND", "PASSBAND"])
 
         # Extract RA & DEC
         ra_deg, dec_deg = cls._extract_coordinates(header)
+        if ra_deg is None and dec_deg is None and primary_header is not header:
+            ra_deg, dec_deg = cls._extract_coordinates(primary_header)
 
         # Evaluate WCS availability and pixel scale
         wcs_available, pixel_scale = cls._evaluate_wcs(header)
+        if not wcs_available and primary_header is not header:
+            wcs_available, pixel_scale = cls._evaluate_wcs(primary_header)
 
-        # Collect critical header summary
-        headers_summary = cls._summarize_headers(header)
+        # Collect critical header summary (combining primary and image header)
+        headers_summary = cls._summarize_headers(primary_header)
+        headers_summary.update(cls._summarize_headers(header))
 
         return FitsInspectionResponse(
             filename=filename,

@@ -13,6 +13,8 @@
     "electron:preview": "npm run build:all && electron .",
     "backend:dev": "PYTHONPATH=. backend/.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8088 --reload",
     "test:backend": "PYTHONPATH=. backend/.venv/bin/pytest backend/tests",
+    "test:integration": "node test/integration.test.mjs",
+    "test:all": "npm run test:backend && npm run test:integration",
     "lint": "oxlint",
     "preview": "vite preview"
   },

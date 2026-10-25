@@ -20,5 +20,8 @@ class Settings:
         "vscode-webview://",
     ]
 
+    # Maximum allowed payload size for FITS inspection (500 MB)
+    MAX_UPLOAD_SIZE_BYTES: int = int(os.getenv("ASTRION_MAX_UPLOAD_BYTES", 500 * 1024 * 1024))
+
 
 settings = Settings()

@@ -15,6 +15,7 @@ export interface BackendProcessStatus {
   url: string
   error?: string
   pid?: number
+  restarts?: number
 }
 
 export interface AstrionDesktopAPI {
@@ -35,6 +36,12 @@ export interface AstrionDesktopAPI {
 
   /** Returns current status of the integrated Python scientific engine */
   getBackendStatus: () => Promise<BackendProcessStatus>
+
+  /** Triggers a clean restart of the integrated Python scientific engine */
+  restartBackend: () => Promise<BackendProcessStatus>
+
+  /** Subscribes to realtime backend status changes */
+  onBackendStatusChange: (callback: (status: BackendProcessStatus) => void) => () => void
 }
 
 declare global {
