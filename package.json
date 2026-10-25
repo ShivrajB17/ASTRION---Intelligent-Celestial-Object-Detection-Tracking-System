@@ -3,9 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:electron": "node electron/build.js",
+    "build:all": "npm run build && npm run build:electron",
+    "electron:dev": "concurrently -k -n \"VITE,ELECTRON\" -c \"cyan,magenta\" \"cross-env BROWSER=none vite --host 127.0.0.1\" \"wait-on -t 20000 tcp:127.0.0.1:5173 && node electron/build.js && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "electron:preview": "npm run build:all && electron .",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -24,10 +29,15 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.6.1",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^45.0.0",
+    "esbuild": "^0.28.2",
     "oxlint": "^1.88.0",
     "postcss": "^8.5.31",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "wait-on": "^9.5.1"
   }
 }

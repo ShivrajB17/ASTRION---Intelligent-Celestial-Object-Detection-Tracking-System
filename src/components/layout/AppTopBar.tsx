@@ -97,13 +97,20 @@ export const AppTopBar: React.FC = () => {
 
         {/* Backend Bridge Status Indicator */}
         <div 
-          onClick={() => notify('Backend Bridge Status', 'Scientific Astropy/Python engine awaiting Phase 2 bridge. Running in Phase 1 frontend shell mode.', 'info')}
+          onClick={() => notify('Runtime Environment', window.astrion?.isElectron ? 'Running inside native macOS Electron desktop shell with secure context isolation.' : 'Running in Web Browser mode.', 'info')}
           className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-space-900 border border-slate-800 text-[11px] font-mono cursor-pointer hover:border-slate-700 transition-colors"
-          title="Python Scientific Backend Bridge"
+          title="Runtime Environment"
         >
           <Cpu className="w-3.5 h-3.5 text-astro-cyan" />
-          <span className="text-slate-400">Engine:</span>
-          <span className="text-astro-cyan font-semibold">Phase 1 Shell</span>
+          <span className="text-slate-400">Runtime:</span>
+          {window.astrion?.isElectron ? (
+            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              macOS Desktop
+            </span>
+          ) : (
+            <span className="text-astro-cyan font-semibold">Web Browser</span>
+          )}
         </div>
 
         {/* Notification Bell */}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Cpu, Monitor, Sliders, RotateCcw, Check } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Cpu, Monitor, Sliders, RotateCcw, Check, ShieldCheck } from 'lucide-react'
 import { useAstrion } from '../context/AstrionContext'
 
 export const SettingsPage: React.FC = () => {
@@ -8,6 +8,18 @@ export const SettingsPage: React.FC = () => {
   const [coordinateFormat, setCoordinateFormat] = useState<'decimal' | 'sexagesimal'>('decimal')
   const [velocityUnit, setVelocityUnit] = useState<'arcsec_hr' | 'deg_day'>('arcsec_hr')
   const [pythonPort, setPythonPort] = useState('8088')
+  const [desktopInfo, setDesktopInfo] = useState<{ version: string; platform: string } | null>(null)
+
+  useEffect(() => {
+    if (window.astrion?.isElectron) {
+      Promise.all([
+        window.astrion.getVersion?.() ?? Promise.resolve('Unknown'),
+        window.astrion.getPlatform?.() ?? Promise.resolve('darwin'),
+      ]).then(([version, platform]) => {
+        setDesktopInfo({ version, platform })
+      }).catch((e) => console.error('Failed to query electron metadata', e))
+    }
+  }, [])
 
   const handleSave = () => {
     notify('Settings Saved', 'Workspace configuration updated successfully.', 'success')
@@ -75,15 +87,26 @@ export const SettingsPage: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-space-900 border border-slate-800 space-y-3 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Target Desktop Shell:</span>
-              <span className="font-mono text-white font-bold">Electron macOS Architecture</span>
+              <span className="text-slate-400">Desktop Runtime Status:</span>
+              {desktopInfo ? (
+                <span className="font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Electron v{desktopInfo.version} ({desktopInfo.platform})
+                </span>
+              ) : (
+                <span className="font-mono text-slate-300">
+                  Web Browser Mode (IPC Bridge Ready)
+                </span>
+              )}
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Backend Communication Protocol:</span>
-              <span className="font-mono text-astro-cyan">Electron IPC / Local FastRPC</span>
+              <span className="text-slate-400">Security Sandbox & Isolation:</span>
+              <span className="font-mono text-astro-cyan font-medium">
+                Context Isolation Active • Node Integration Disabled
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Local Bridge Port:</span>
+              <span className="text-slate-400">Scientific Python Backend Port:</span>
               <input
                 type="text"
                 value={pythonPort}

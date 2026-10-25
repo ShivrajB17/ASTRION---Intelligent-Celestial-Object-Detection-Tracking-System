@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UploadCloud, FileText, Check, X, AlertCircle, Database, Sparkles } from 'lucide-react'
+import { UploadCloud, FileText, Check, X, AlertCircle, Database, Sparkles, FolderOpen } from 'lucide-react'
 import { useAstrion } from '../../context/AstrionContext'
 import { FitsIngestionService } from '../../services/fitsIngestion.service'
 import type { FitsObservation } from '../../types/astronomy'
@@ -82,6 +82,40 @@ export const FITSImportModal: React.FC = () => {
     setStagedFiles((prev) => [...prev, ...newObservations])
     setIsProcessing(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleNativeDesktopSelect = async () => {
+    if (!window.astrion?.isElectron) {
+      fileInputRef.current?.click()
+      return
+    }
+    setIsProcessing(true)
+    try {
+      const res = await window.astrion.selectFitsFiles()
+      if (!res.canceled && res.filePaths.length > 0) {
+        const newObservations: FitsObservation[] = res.filePaths.map((fp, index) => {
+          const filename = fp.split('/').pop() || fp
+          return {
+            id: `obs-native-${Date.now()}-${index}`,
+            filename,
+            sizeBytes: 16777216,
+            uploadedAt: new Date().toISOString(),
+            targetName: filename.replace(/\.(fits|fit|fts|gz)$/i, ''),
+            filterBand: 'Visible / Near-IR',
+            telescope: 'Native Desktop Importer (macOS)',
+            raCenter: 184.22 + index * 0.05,
+            decCenter: 29.81 + index * 0.04,
+            status: 'raw',
+            dimensions: { width: 2048, height: 2048 },
+          }
+        })
+        setStagedFiles((prev) => [...prev, ...newObservations])
+      }
+    } catch (err) {
+      console.error('Error opening native file picker:', err)
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -177,7 +211,13 @@ export const FITSImportModal: React.FC = () => {
               }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (window.astrion?.isElectron) {
+                  handleNativeDesktopSelect()
+                } else {
+                  fileInputRef.current?.click()
+                }
+              }}
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center ${
                 dragOver
                   ? 'border-astro-cyan bg-astro-cyan/5 scale-[1.01]'
@@ -201,6 +241,12 @@ export const FITSImportModal: React.FC = () => {
               <p className="text-xs text-slate-400 mt-1.5">
                 Supports FITS, FITS.GZ, Flexible Image Transport System standard HDUs
               </p>
+              {window.astrion?.isElectron && (
+                <div className="mt-3 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-mono text-emerald-400 flex items-center gap-1.5">
+                  <FolderOpen className="w-3 h-3" />
+                  macOS Native File Dialog Enabled
+                </div>
+              )}
             </div>
 
             {/* Quick Benchmark Datasets */}
