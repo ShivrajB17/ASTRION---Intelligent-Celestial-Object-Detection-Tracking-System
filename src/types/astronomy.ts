@@ -10,6 +10,18 @@ export interface PipelineStage {
   details?: string
 }
 
+export interface PixelStatistics {
+  min: number | null
+  max: number | null
+  mean: number | null
+  median: number | null
+  std: number | null
+  valid_pixels: number
+  nan_pixels: number
+  inf_pixels: number
+  total_pixels: number
+}
+
 export interface FitsObservation {
   id: string
   filename: string
@@ -24,12 +36,22 @@ export interface FitsObservation {
   epochTime?: string
   exptime?: number
   bitpix?: number
-  dimensions?: { width: number; height: number; naxis?: number }
+  dtype?: string
+  equinox?: number
+  selectedHduIndex?: number
+  selectedHduName?: string
+  selectedHduType?: string
+  totalHdus?: number
+  dimensions?: { width: number; height: number; naxis?: number; depth?: number | null }
   wcsAvailable?: boolean
   pixelScaleArcsec?: number
+  statistics?: PixelStatistics
   headersSummary?: Record<string, string | number | boolean>
   inspectionSource?: 'astropy_backend' | 'client_parser' | 'sample_benchmark'
-  status: 'raw' | 'preprocessed' | 'analyzed'
+  hasPreview?: boolean
+  previewUrl?: string
+  fileExists?: boolean
+  status: 'raw' | 'preprocessed' | 'analyzed' | 'missing_file'
 }
 
 export interface CelestialCandidate {

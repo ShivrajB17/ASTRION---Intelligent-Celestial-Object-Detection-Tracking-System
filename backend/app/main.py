@@ -12,6 +12,7 @@ import uvicorn
 
 from backend.app.api.fits import router as fits_router
 from backend.app.api.health import router as health_router
+from backend.app.api.observations import router as observations_router
 from backend.app.api.system import router as system_router
 from backend.app.config import settings
 
@@ -20,6 +21,7 @@ from backend.app.config import settings
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifecycle management."""
     print(f"[ASTRION Backend] Starting {settings.APP_NAME} v{settings.VERSION} on {settings.HOST}:{settings.PORT}")
+    settings.ensure_directories()
     yield
     print(f"[ASTRION Backend] Shutting down {settings.APP_NAME}")
 
@@ -39,7 +41,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_origin_regex=r"^http://(127\.0\.0\.1|localhost)(:[0-9]+)?$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -61,6 +63,7 @@ async def http_exception_handler(_request: Request, exc: HTTPException):
 app.include_router(health_router)
 app.include_router(system_router)
 app.include_router(fits_router)
+app.include_router(observations_router)
 
 
 @app.get("/", tags=["Root"])

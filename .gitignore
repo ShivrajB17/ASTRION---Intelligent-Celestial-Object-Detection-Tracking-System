@@ -33,4 +33,7 @@ backend/.venv
 .pytest_cache/
 .coverage
 htmlcov/
+backend/data/
+*.db
+*.sqlite3
 

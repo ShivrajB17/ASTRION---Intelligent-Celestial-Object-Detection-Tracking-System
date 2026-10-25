@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { 
   AppViewMode, 
   NavigationRoute 
@@ -9,6 +9,48 @@ import type {
   AnalysisSession, 
   ToastMessage 
 } from '../types/astronomy'
+import { backendApi, type ObservationRecord } from '../services/backendApi.service'
+
+export function mapBackendRecordToObservation(rec: ObservationRecord): FitsObservation {
+  return {
+    id: rec.id,
+    filename: rec.filename,
+    sizeBytes: rec.file_size_bytes,
+    uploadedAt: rec.created_at,
+    targetName: rec.object_name || rec.filename.replace(/\.[^/.]+$/, ""),
+    filterBand: rec.filter_band || 'Scientific Band',
+    telescope: rec.telescope || 'Astronomical Instrument',
+    instrument: rec.instrument || undefined,
+    epochTime: rec.date_obs || undefined,
+    exptime: rec.exptime ?? undefined,
+    bitpix: rec.bitpix ?? undefined,
+    dtype: rec.dtype ?? undefined,
+    equinox: rec.equinox ?? undefined,
+    raCenter: rec.ra_deg ?? undefined,
+    decCenter: rec.dec_deg ?? undefined,
+    wcsAvailable: rec.wcs_available,
+    pixelScaleArcsec: rec.pixel_scale_arcsec ?? undefined,
+    selectedHduIndex: rec.selected_hdu_index,
+    selectedHduName: rec.selected_hdu_name,
+    selectedHduType: rec.selected_hdu_type,
+    totalHdus: rec.total_hdus,
+    dimensions: rec.dimensions
+      ? {
+          width: rec.dimensions.width || 0,
+          height: rec.dimensions.height || 0,
+          naxis: rec.dimensions.naxis,
+          depth: rec.dimensions.depth,
+        }
+      : undefined,
+    statistics: rec.statistics || undefined,
+    headersSummary: rec.headers_summary,
+    inspectionSource: 'astropy_backend',
+    hasPreview: rec.has_preview,
+    previewUrl: rec.preview_url ? backendApi.getObservationPreviewUrl(rec.id) : undefined,
+    fileExists: rec.file_exists,
+    status: rec.file_exists ? 'raw' : 'missing_file',
+  }
+}
 
 const INITIAL_PIPELINE_STAGES: PipelineStage[] = [
   {
@@ -67,8 +109,9 @@ interface AstrionContextType {
   // Astronomical Data
   observations: FitsObservation[]
   addObservations: (newObs: FitsObservation[]) => void
-  removeObservation: (id: string) => void
+  removeObservation: (id: string) => Promise<void>
   clearObservations: () => void
+  reloadObservations: () => Promise<void>
   selectedObservation: FitsObservation | null
   setSelectedObservation: (obs: FitsObservation | null) => void
 
@@ -101,7 +144,7 @@ export const AstrionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeRoute, setActiveRoute] = useState<NavigationRoute>('mission-control')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
-  // Astronomical Observations - Initially empty as required
+  // Astronomical Observations - Initially loaded from SQLite persistence
   const [observations, setObservations] = useState<FitsObservation[]>([])
   const [selectedObservation, setSelectedObservation] = useState<FitsObservation | null>(null)
 
@@ -139,25 +182,60 @@ export const AstrionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
+  const reloadObservations = useCallback(async () => {
+    try {
+      const records = await backendApi.getObservations()
+      if (records && records.length > 0) {
+        const mapped = records.map(mapBackendRecordToObservation)
+        setObservations(mapped)
+        setSelectedObservation((prev) => {
+          if (!prev) return mapped[0]
+          return mapped.find((m) => m.id === prev.id) || mapped[0]
+        })
+      }
+    } catch (err) {
+      console.warn('[AstrionContext] Could not load persisted observations:', err)
+    }
+  }, [])
+
+  // Auto-load observations from SQLite on initial mount
+  useEffect(() => {
+    reloadObservations()
+  }, [reloadObservations])
+
   const toggleSidebar = useCallback(() => {
     setIsSidebarCollapsed((prev) => !prev)
   }, [])
 
   const addObservations = useCallback((newObs: FitsObservation[]) => {
-    setObservations((prev) => [...prev, ...newObs])
+    setObservations((prev) => {
+      // Avoid duplicate IDs
+      const existingIds = new Set(prev.map((o) => o.id))
+      const filteredNew = newObs.filter((o) => !existingIds.has(o.id))
+      const combined = [...prev, ...filteredNew]
+      if (!selectedObservation && combined.length > 0) {
+        setSelectedObservation(combined[0])
+      }
+      return combined
+    })
     notify(
       `Observation${newObs.length > 1 ? 's' : ''} Added`,
       `Successfully loaded ${newObs.length} FITS file${newObs.length > 1 ? 's' : ''} into active workspace.`,
       'success'
     )
-  }, [notify])
+  }, [selectedObservation, notify])
 
-  const removeObservation = useCallback((id: string) => {
+  const removeObservation = useCallback(async (id: string) => {
+    try {
+      await backendApi.deleteObservation(id)
+    } catch (err) {
+      console.warn(`[AstrionContext] Local deletion fallback for ${id}:`, err)
+    }
     setObservations((prev) => prev.filter((o) => o.id !== id))
     if (selectedObservation?.id === id) {
       setSelectedObservation(null)
     }
-    notify('Observation Removed', 'Observation removed from workspace.', 'info')
+    notify('Observation Removed', 'Observation removed from workspace and storage.', 'info')
   }, [selectedObservation, notify])
 
   const clearObservations = useCallback(() => {
@@ -257,6 +335,7 @@ export const AstrionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addObservations,
         removeObservation,
         clearObservations,
+        reloadObservations,
         selectedObservation,
         setSelectedObservation,
         pipelineStages,

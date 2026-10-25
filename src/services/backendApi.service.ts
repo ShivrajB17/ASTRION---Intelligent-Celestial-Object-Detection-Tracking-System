@@ -201,6 +201,150 @@ class BackendApiService {
       throw err
     }
   }
+
+  /**
+   * Ingests a genuine FITS file into backend storage and SQLite persistence.
+   * Performs science HDU selection, NumPy pixel statistics calculation, and preview generation.
+   */
+  public async ingestFitsFile(file: File, allowDuplicate: boolean = false): Promise<IngestResponse> {
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s for large files
+
+    try {
+      const url = `${this.baseUrl}/api/fits/ingest?allow_duplicate=${allowDuplicate}`
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        let errorDetail = `HTTP ${response.status}`
+        try {
+          const errJson = await response.json()
+          if (errJson.detail) errorDetail = errJson.detail
+        } catch {}
+        throw new Error(`FITS ingestion failed: ${errorDetail}`)
+      }
+
+      return await response.json()
+    } catch (err: any) {
+      clearTimeout(timeoutId)
+      if (err.name === 'AbortError') {
+        throw new Error('FITS ingestion timed out after 30 seconds')
+      }
+      throw err
+    }
+  }
+
+  /**
+   * Retrieves all persisted observations from SQLite.
+   */
+  public async getObservations(): Promise<ObservationRecord[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/observations`, {
+        headers: { Accept: 'application/json' },
+      })
+      if (!response.ok) {
+        throw new Error(`Failed to list observations (HTTP ${response.status})`)
+      }
+      const data: ObservationListResponse = await response.json()
+      return data.observations
+    } catch (err: any) {
+      console.warn('[BackendApiService] Failed to fetch observations:', err)
+      return []
+    }
+  }
+
+  /**
+   * Retrieves an observation by its unique identifier.
+   */
+  public async getObservation(id: string): Promise<ObservationRecord> {
+    const response = await fetch(`${this.baseUrl}/api/observations/${id}`)
+    if (!response.ok) {
+      throw new Error(`Failed to retrieve observation ${id} (HTTP ${response.status})`)
+    }
+    return await response.json()
+  }
+
+  /**
+   * Deletes an observation record and its source file from disk.
+   */
+  public async deleteObservation(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/observations/${id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to delete observation ${id} (HTTP ${response.status})`)
+    }
+  }
+
+  /**
+   * Returns the absolute preview URL for a given observation ID.
+   */
+  public getObservationPreviewUrl(id: string): string {
+    return `${this.baseUrl}/api/observations/${id}/preview`
+  }
+}
+
+export interface PixelStatistics {
+  min: number | null
+  max: number | null
+  mean: number | null
+  median: number | null
+  std: number | null
+  valid_pixels: number
+  nan_pixels: number
+  inf_pixels: number
+  total_pixels: number
+}
+
+export interface ObservationRecord {
+  id: string
+  filename: string
+  file_size_bytes: number
+  file_hash: string | null
+  file_exists: boolean
+  created_at: string
+  date_obs: string | null
+  exptime: number | null
+  telescope: string | null
+  instrument: string | null
+  object_name: string | null
+  filter_band: string | null
+  equinox: number | null
+  ra_deg: number | null
+  dec_deg: number | null
+  wcs_available: boolean
+  pixel_scale_arcsec: number | null
+  selected_hdu_index: number
+  selected_hdu_name: string
+  selected_hdu_type: string
+  total_hdus: number
+  hdus: HduInfo[]
+  dimensions: FitsDimensions | null
+  bitpix: number | null
+  dtype: string | null
+  statistics: PixelStatistics | null
+  headers_summary: Record<string, string | number | boolean>
+  ingestion_status: string
+  has_preview: boolean
+  preview_url: string | null
+}
+
+export interface ObservationListResponse {
+  count: number
+  observations: ObservationRecord[]
+}
+
+export interface IngestResponse {
+  status: 'success' | 'duplicate'
+  message: string
+  observation: ObservationRecord
 }
 
 export const backendApi = new BackendApiService()

@@ -157,8 +157,22 @@ async function runTests() {
     }
     log(`✓ Corrupt FITS rejected cleanly with HTTP 422 and structured error response.`)
 
-    // 6. Test process cleanup and shutdown
-    log('Test 6: Testing clean backend termination via SIGTERM...')
+    // 6. Test /api/observations
+    log('Test 6: Querying /api/observations...')
+    const obsList = await new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${TEST_PORT}/api/observations`, (res) => {
+        let raw = ''
+        res.on('data', (c) => (raw += c))
+        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }))
+      }).on('error', reject)
+    })
+    if (obsList.status !== 200 || typeof obsList.body.count !== 'number') {
+      throw new Error(`Failed to list observations: ${JSON.stringify(obsList)}`)
+    }
+    log(`✓ /api/observations verified: status=${obsList.status}, count=${obsList.body.count}`)
+
+    // 7. Test process cleanup and shutdown
+    log('Test 7: Testing clean backend termination via SIGTERM...')
     backendProc.kill('SIGTERM')
 
     await new Promise((resolve) => {

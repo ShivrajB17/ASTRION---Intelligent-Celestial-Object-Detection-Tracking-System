@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, FileText, Check, X, AlertCircle, Database, Sparkles, FolderOpen } from 'lucide-react'
-import { useAstrion } from '../../context/AstrionContext'
+import { useAstrion, mapBackendRecordToObservation } from '../../context/AstrionContext'
 import { FitsIngestionService } from '../../services/fitsIngestion.service'
 import { backendApi } from '../../services/backendApi.service'
 import type { FitsObservation } from '../../types/astronomy'
@@ -69,37 +69,18 @@ export const FITSImportModal: React.FC = () => {
 
   const inspectFileWithBestService = async (file: File): Promise<FitsObservation | null> => {
     try {
-      // 1. Attempt authentic Astropy inspection via local Python backend
-      const insp = await backendApi.inspectFitsFile(file)
-      return {
-        id: `obs-astropy-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        filename: insp.filename,
-        sizeBytes: insp.file_size_bytes,
-        uploadedAt: new Date().toISOString(),
-        targetName: insp.object_name || file.name.replace(/\.(fits|fit|fts|gz)$/i, ''),
-        filterBand: insp.filter_band || 'Scientific Band',
-        telescope: insp.telescope || 'Astronomical Instrument',
-        instrument: insp.instrument || undefined,
-        epochTime: insp.date_obs || undefined,
-        exptime: insp.exptime ?? undefined,
-        bitpix: insp.bitpix ?? undefined,
-        raCenter: insp.ra_deg ?? undefined,
-        decCenter: insp.dec_deg ?? undefined,
-        wcsAvailable: insp.wcs_available,
-        pixelScaleArcsec: insp.pixel_scale_arcsec ?? undefined,
-        headersSummary: insp.headers_summary,
-        inspectionSource: 'astropy_backend',
-        status: 'raw',
-        dimensions: insp.dimensions
-          ? { width: insp.dimensions.width || 2048, height: insp.dimensions.height || 2048, naxis: insp.dimensions.naxis }
-          : undefined,
+      // 1. Attempt authentic Astropy ingestion & SQLite persistence via local Python backend
+      const res = await backendApi.ingestFitsFile(file)
+      if (res.status === 'duplicate') {
+        notify('Duplicate FITS Detected', `Observation '${file.name}' was already ingested. Re-using stored record.`, 'info')
       }
+      return mapBackendRecordToObservation(res.observation)
     } catch (err: any) {
-      if (err.message && err.message.includes('FITS inspection failed')) {
-        notify('FITS Inspection Error', err.message, 'error')
+      if (err.message && err.message.includes('FITS ingestion failed')) {
+        notify('FITS Ingestion Error', err.message, 'error')
         return null
       }
-      // 2. Graceful fallback to client-side reader if backend is offline
+      // 2. Graceful fallback to client-side reader if backend is offline in browser mode
       const clientResult = await FitsIngestionService.parseLocalFileMetadata(file)
       if (clientResult.success && clientResult.data) {
         return {
@@ -296,10 +277,10 @@ export const FITSImportModal: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold tracking-wider uppercase text-slate-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-astro-cyan" />
-                  Quick Benchmark Samples (NASA Space Apps 2026)
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  Simulated Benchmark Templates (NASA Space Apps 2026)
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">Instant Test Data</span>
+                <span className="text-[11px] text-amber-500/80 font-mono">Simulated Demo Data</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {SAMPLE_ASTRONOMICAL_DATASETS.map((sample, idx) => (
@@ -307,10 +288,10 @@ export const FITSImportModal: React.FC = () => {
                     key={idx}
                     type="button"
                     onClick={() => addSampleDataset(sample)}
-                    className="flex flex-col text-left p-3 rounded-xl bg-space-800/60 hover:bg-space-700/80 border border-slate-800 hover:border-astro-blue/40 transition-all group"
+                    className="flex flex-col text-left p-3 rounded-xl bg-space-800/60 hover:bg-space-700/80 border border-slate-800 hover:border-amber-500/40 transition-all group"
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-medium text-white group-hover:text-astro-cyan transition-colors truncate">
+                      <span className="text-xs font-medium text-white group-hover:text-amber-300 transition-colors truncate">
                         {sample.name}
                       </span>
                       <span className="text-[10px] text-slate-500 font-mono shrink-0 ml-1">
@@ -330,7 +311,7 @@ export const FITSImportModal: React.FC = () => {
               <div className="border border-slate-800 rounded-xl overflow-hidden bg-space-900/60">
                 <div className="px-4 py-2.5 bg-space-800/60 border-b border-slate-800 flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-300">
-                    Staged for Ingestion ({stagedFiles.length})
+                    Staged Observations ({stagedFiles.length})
                   </span>
                   <button
                     onClick={() => setStagedFiles([])}
@@ -346,6 +327,15 @@ export const FITSImportModal: React.FC = () => {
                         <FileText className="w-4 h-4 text-astro-blue shrink-0" />
                         <span className="text-slate-200 font-mono truncate">{file.filename}</span>
                         <span className="text-slate-500 shrink-0">({formatBytes(file.sizeBytes)})</span>
+                        {file.inspectionSource === 'astropy_backend' ? (
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                            ASTROPY INGESTED
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
+                            SIMULATED BENCHMARK
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={() => removeStaged(file.id)}

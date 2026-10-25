@@ -15,6 +15,7 @@
     "test:backend": "PYTHONPATH=. backend/.venv/bin/pytest backend/tests",
     "test:integration": "node test/integration.test.mjs",
     "test:all": "npm run test:backend && npm run test:integration",
+    "typecheck": "tsc -b",
     "lint": "oxlint",
     "preview": "vite preview"
   },

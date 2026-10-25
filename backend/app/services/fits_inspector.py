@@ -30,6 +30,7 @@ class FitsInspectorService:
         ".fits.gz",
         ".fit.gz",
         ".fts.gz",
+        ".fz",
         ".tar",
         ".tar.gz",
     ]
