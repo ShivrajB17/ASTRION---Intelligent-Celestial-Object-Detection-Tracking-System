@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #050816;
+    --bg-secondary: #0B1020;
+    --accent-blue: #3B82F6;
+    --accent-cyan: #22D3EE;
+    --accent-violet: #8B5CF6;
+  }
+
+  * {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  html, body, #root {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #050816;
+    color: #F8FAFC;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Astronomical & Glassmorphic Utilities */
+@layer utilities {
+  .glass-panel {
+    background: rgba(11, 16, 32, 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-panel-elevated {
+    background: rgba(20, 30, 56, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(59, 130, 246, 0.22);
+  }
+
+  .glass-panel-interactive {
+    background: rgba(11, 16, 32, 0.65);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .glass-panel-interactive:hover {
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(34, 211, 238, 0.35);
+    box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.25);
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+  }
+
+  .text-glow-blue {
+    text-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+  }
+
+  .border-glow-blue {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  }
+}
+
+/* Custom modern scrollbar for scientific telemetry */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050816;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2c4f;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+
+/* Radial space aura backgrounds */
+.radial-space-glow {
+  background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.06) 40%, transparent 70%);
+}
+
+.radial-top-glow {
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34, 211, 238, 0.15), transparent 70%);
+}
